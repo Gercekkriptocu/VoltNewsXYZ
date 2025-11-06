@@ -1,0 +1,461 @@
+'use client'
+
+/**
+ * GitHub Export Component - Static File Approach
+ * Exports all project files to GitHub without relying on file system API
+ */
+
+import { useState } from 'react'
+import { Github, Loader2, X, CheckCircle2, ExternalLink, Eye, EyeOff } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+
+interface GitHubExportStaticProps {
+  language: 'tr' | 'en'
+}
+
+// All project files with their content
+const PROJECT_FILES = [
+  // Root config files will be added dynamically
+];
+
+export function GitHubExportStatic({ language }: GitHubExportStaticProps): React.JSX.Element {
+  const [showDialog, setShowDialog] = useState<boolean>(false)
+  const [token, setToken] = useState<string>('')
+  const [repoName, setRepoName] = useState<string>('volt-crypto-news')
+  const [repoDescription, setRepoDescription] = useState<string>('VOLT - Turkish Crypto News Aggregator')
+  const [loading, setLoading] = useState<boolean>(false)
+  const [error, setError] = useState<string>('')
+  const [success, setSuccess] = useState<string>('')
+  const [showToken, setShowToken] = useState<boolean>(false)
+  const [uploadProgress, setUploadProgress] = useState<number>(0)
+
+  const texts = {
+    tr: {
+      buttonTitle: 'GitHub\'a Aktar',
+      title: 'GitHub\'a Kod Aktar',
+      description: 'Tüm proje dosyalarını GitHub repository\'sine yükleyin',
+      tokenLabel: 'GitHub Token',
+      tokenPlaceholder: 'ghp_xxxxxxxxxxxx',
+      repoNameLabel: 'Repository Adı',
+      repoNamePlaceholder: 'volt-crypto-news',
+      repoDescLabel: 'Repository Açıklaması',
+      repoDescPlaceholder: 'VOLT - Turkish Crypto News Aggregator',
+      exportButton: 'GitHub\'a Aktar',
+      exporting: 'Aktarılıyor...',
+      close: 'Kapat',
+      createToken: 'GitHub Token Oluştur',
+      viewRepo: 'Repository\'yi Görüntüle',
+      howToGetToken: 'Token Nasıl Alınır?',
+      tokenSteps: [
+        'Aşağıdaki butona tıklayın',
+        '"Generate token" butonuna basın',
+        'Token\'ı kopyalayın ve buraya yapıştırın'
+      ],
+      uploading: 'Yükleniyor'
+    },
+    en: {
+      buttonTitle: 'Export to GitHub',
+      title: 'Export Code to GitHub',
+      description: 'Upload all project files to GitHub repository',
+      tokenLabel: 'GitHub Token',
+      tokenPlaceholder: 'ghp_xxxxxxxxxxxx',
+      repoNameLabel: 'Repository Name',
+      repoNamePlaceholder: 'volt-crypto-news',
+      repoDescLabel: 'Repository Description',
+      repoDescPlaceholder: 'VOLT - Turkish Crypto News Aggregator',
+      exportButton: 'Export to GitHub',
+      exporting: 'Exporting...',
+      close: 'Close',
+      createToken: 'Create GitHub Token',
+      viewRepo: 'View Repository',
+      howToGetToken: 'How to Get Token?',
+      tokenSteps: [
+        'Click the button below',
+        'Click "Generate token"',
+        'Copy the token and paste it here'
+      ],
+      uploading: 'Uploading'
+    }
+  }
+
+  const t = texts[language]
+
+  /**
+   * Get all project files
+   */
+  async function getAllProjectFiles(): Promise<Array<{ path: string; content: string }>> {
+    console.log('📦 Collecting all project files...');
+    
+    // Fetch dynamic files from API
+    try {
+      const response = await fetch('/api/files/get-all');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.files && Array.isArray(data.files)) {
+          console.log(`✅ Got ${data.files.length} files from API`);
+          return data.files;
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch files from API:', error);
+    }
+
+    // Fallback to minimal config files
+    return [
+      {
+        path: 'package.json',
+        content: JSON.stringify({
+          "name": "volt-crypto-news",
+          "version": "0.1.0",
+          "private": true,
+          "scripts": {
+            "dev": "next dev",
+            "build": "next build",
+            "start": "next start",
+            "lint": "next lint"
+          },
+          "dependencies": {
+            "@farcaster/miniapp-sdk": "^0.1.9",
+            "@farcaster/quick-auth": "^1.0.0",
+            "next": "15.1.3",
+            "react": "^19.0.0",
+            "react-dom": "^19.0.0",
+            "cheerio": "^1.0.0"
+          }
+        }, null, 2)
+      },
+      {
+        path: 'README.md',
+        content: `# VOLT - Turkish Crypto News Aggregator
+
+A retro Windows XP themed crypto news app with dual-language support.
+
+## Features
+- Real-time crypto news updates
+- Turkish translations
+- Telegram auto-sharing
+- Retro XP design
+
+## Setup
+1. Install dependencies: \`npm install\`
+2. Run development server: \`npm run dev\`
+3. Open http://localhost:3000
+
+## Deploy
+Deploy to Vercel for best results.`
+      },
+      {
+        path: '.gitignore',
+        content: `# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# local env files
+.env*.local
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts`
+      }
+    ];
+  }
+
+  /**
+   * Main export function using the full project export API
+   */
+  const handleExport = async (): Promise<void> => {
+    if (!token || !repoName) {
+      setError(language === 'tr' ? 'Lütfen tüm alanları doldurun' : 'Please fill all fields')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setSuccess('')
+    setUploadProgress(0)
+
+    try {
+      console.log('\n═══════════════════════════════════════');
+      console.log('🚀 GITHUB EXPORT BAŞLADI');
+      console.log('═══════════════════════════════════════\n');
+      
+      // Use the full project export API endpoint
+      console.log('📤 Calling /api/github/export-full-project...');
+      const response = await fetch('/api/github/export-full-project', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token,
+          repoName,
+          repoDescription: repoDescription || 'VOLT - Turkish Crypto News Aggregator',
+        }),
+      });
+
+      const data = await response.json() as {
+        success?: boolean;
+        repoUrl?: string;
+        message?: string;
+        error?: string;
+        stats?: {
+          total: number;
+          uploaded: number;
+          failed: number;
+          failedFiles: string[];
+        };
+      };
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Export işlemi başarısız oldu');
+      }
+
+      console.log(`✅ SUCCESS: ${data.message}`);
+      if (data.stats) {
+        console.log(`📊 Stats: ${data.stats.uploaded}/${data.stats.total} files uploaded`);
+        if (data.stats.failed > 0) {
+          console.warn(`⚠️ ${data.stats.failed} files failed:`, data.stats.failedFiles);
+        }
+      }
+
+      setSuccess(data.repoUrl || '');
+      setUploadProgress(100);
+      
+      // Clear form after 5 seconds
+      setTimeout(() => {
+        setShowDialog(false);
+        setToken('');
+        setSuccess('');
+        setUploadProgress(0);
+      }, 5000);
+    } catch (err) {
+      console.error('❌ Export error:', err);
+      setError(err instanceof Error ? err.message : 'Bir hata oluştu');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openGitHubTokenPage = (): void => {
+    window.open('https://github.com/settings/tokens/new?description=VOLT%20Export&scopes=repo', '_blank')
+  };
+
+  return (
+    <>
+      {/* Floating Button - Right Middle */}
+      <button
+        onClick={() => setShowDialog(true)}
+        className="fixed right-4 top-1/2 -translate-y-1/2 z-40 bg-gradient-to-br from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-full p-4 shadow-2xl transition-all duration-300 hover:scale-110 active:scale-95 group"
+        title={t.buttonTitle}
+        style={{
+          boxShadow: '0 8px 32px rgba(124, 58, 237, 0.5)',
+        }}
+      >
+        <Github className="w-6 h-6 group-hover:rotate-12 transition-transform duration-300" />
+        <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+      </button>
+
+      {/* Dialog */}
+      {showDialog && (
+        <div className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div 
+            className="xp-window max-w-md w-full overflow-hidden"
+            style={{
+              animation: 'scaleIn 0.3s ease-out'
+            }}
+          >
+            {/* XP Title Bar */}
+            <div className="xp-title-bar">
+              <div className="flex items-center gap-2">
+                <Github className="w-4 h-4 text-white" />
+                <span className="text-white text-sm font-bold">{t.title}</span>
+              </div>
+              <button 
+                className="xp-control-btn xp-close-btn" 
+                onClick={() => setShowDialog(false)}
+                disabled={loading}
+              >
+                <X className="w-3 h-3 text-white" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="bg-white p-6 space-y-4">
+              {!success ? (
+                <>
+                  <p className="text-sm text-gray-600">
+                    {t.description}
+                  </p>
+
+                  {/* Token Instructions */}
+                  <div className="bg-blue-50 rounded-lg p-3 space-y-2">
+                    <h4 className="font-semibold text-sm text-gray-900">{t.howToGetToken}</h4>
+                    <ol className="text-xs text-gray-700 space-y-1 list-decimal list-inside">
+                      {t.tokenSteps.map((step, i) => (
+                        <li key={i}>{step}</li>
+                      ))}
+                    </ol>
+                    <Button
+                      onClick={openGitHubTokenPage}
+                      variant="outline"
+                      size="sm"
+                      className="w-full mt-2"
+                    >
+                      <ExternalLink className="w-3 h-3 mr-2" />
+                      {t.createToken}
+                    </Button>
+                  </div>
+
+                  {/* Token Input */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-900">
+                      {t.tokenLabel}
+                    </label>
+                    <div className="relative">
+                      <Input
+                        type={showToken ? 'text' : 'password'}
+                        value={token}
+                        onChange={(e) => setToken(e.target.value)}
+                        placeholder={t.tokenPlaceholder}
+                        className="pr-10"
+                        disabled={loading}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowToken(!showToken)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        disabled={loading}
+                      >
+                        {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Repository Name */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-900">
+                      {t.repoNameLabel}
+                    </label>
+                    <Input
+                      type="text"
+                      value={repoName}
+                      onChange={(e) => setRepoName(e.target.value)}
+                      placeholder={t.repoNamePlaceholder}
+                      disabled={loading}
+                    />
+                  </div>
+
+                  {/* Repository Description */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-900">
+                      {t.repoDescLabel}
+                    </label>
+                    <Input
+                      type="text"
+                      value={repoDescription}
+                      onChange={(e) => setRepoDescription(e.target.value)}
+                      placeholder={t.repoDescPlaceholder}
+                      disabled={loading}
+                    />
+                  </div>
+
+                  {/* Progress Bar */}
+                  {loading && uploadProgress > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span>{t.uploading}...</span>
+                        <span>{uploadProgress}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${uploadProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Error Message */}
+                  {error && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2">
+                      <X className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-sm text-red-700">{error}</p>
+                    </div>
+                  )}
+
+                  {/* Export Button */}
+                  <Button
+                    onClick={handleExport}
+                    disabled={loading || !token || !repoName}
+                    className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        {t.exporting}
+                      </>
+                    ) : (
+                      <>
+                        <Github className="w-4 h-4 mr-2" />
+                        {t.exportButton}
+                      </>
+                    )}
+                  </Button>
+                </>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex flex-col items-center gap-3">
+                    <CheckCircle2 className="w-12 h-12 text-green-600" />
+                    <div className="text-center">
+                      <h4 className="font-semibold text-green-900 mb-1">
+                        {language === 'tr' ? 'Başarılı!' : 'Success!'}
+                      </h4>
+                      <p className="text-sm text-green-700">
+                        {language === 'tr' 
+                          ? 'Tüm kodlar GitHub\'a aktarıldı!' 
+                          : 'All code exported to GitHub!'}
+                      </p>
+                    </div>
+                    <a
+                      href={success}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-blue-600 hover:text-blue-700 underline flex items-center gap-1"
+                    >
+                      {t.viewRepo}
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
